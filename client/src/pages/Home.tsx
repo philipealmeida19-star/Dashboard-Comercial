@@ -265,6 +265,16 @@ export default function Home() {
     }, new Map()).values()
   ).sort((a: any, b: any) => b.total - a.total).slice(0, 10); // Top 10 supervisores
 
+  // Prepare Top 10 Lojas (Volume UP) Data
+  const topLojasUP = Array.from(
+    filteredData.reduce((acc, item) => {
+      const cliente = item.Cliente || "Sem Cliente";
+      const valUP = visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0);
+      acc.set(cliente, (acc.get(cliente) || 0) + valUP);
+      return acc;
+    }, new Map())
+  ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
+
   // Preferenza Brand Colors: Green (#1A7B3E), Yellow (#F2C010), Red (#C1272D)
   const COLORS = ['#1A7B3E', '#F2C010', '#C1272D', '#2E8B57', '#E6A800'];
 
@@ -544,6 +554,28 @@ export default function Home() {
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
                     <Bar dataKey="PIZZA PREFERENZA" stackId="a" fill="#1A7B3E" radius={[0, 0, 4, 4]} />
                     <Bar dataKey="PASTEL PREFERENZA" stackId="a" fill="#F2C010" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Top 10 Lojas ({visao === "vendas" ? "Volume UP" : "Devoluções UP"})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[400px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topLojasUP} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                    <XAxis type="number" tickFormatter={(value) => `${(value/1000).toFixed(0)}k`} tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <YAxis dataKey="name" type="category" width={200} tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <Tooltip 
+                      formatter={(value: number) => [new Intl.NumberFormat('pt-BR').format(value) + ' UP', 'Volume']}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Bar dataKey="value" fill="#F2C010" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
