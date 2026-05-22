@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Users, TrendingUp, Target, Briefcase } from "lucide-react";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { TrendingUp, Users, Target, Briefcase, Filter, AlertTriangle, Download } from "lucide-react";
 
 export default function Home() {
   const [data, setData] = useState<any[]>([]);
@@ -68,6 +68,11 @@ export default function Home() {
   const totalVendaUP = filteredData.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
   const totalFTE = filteredData.reduce((sum, item) => sum + (item.FTE || 0), 0);
   
+  // Calculate Devolucoes %
+  const totalVendaBrutaRS = filteredData.reduce((sum, item) => sum + (item.Valor_Liquido || 0) + (item.Valor_Devolucao || 0), 0);
+  const totalDevolucaoRS = filteredData.reduce((sum, item) => sum + (item.Valor_Devolucao || 0), 0);
+  const percentualDevolucao = totalVendaBrutaRS > 0 ? ((totalDevolucaoRS / totalVendaBrutaRS) * 100).toFixed(2) : "0.00";
+  
   // Produtividade (UP / Pessoas)
   // Dados manuais de pessoas para 2026: Jan=198, Fev=197, Mar=182, Abr=176
   // Maio em diante usa o FTE atual (aprox 184)
@@ -98,6 +103,37 @@ export default function Home() {
     }
   }
   const atingimentoRS = metaTotalRS > 0 ? ((totalVendaRS / metaTotalRS) * 100).toFixed(1) : "0";
+
+  // Export to CSV function
+  const exportToCSV = () => {
+    const headers = ["Cliente", "Supervisor", "Produto", visao === "vendas" ? "Venda (R$)" : "Devolução (R$)", visao === "vendas" ? "Venda (UP)" : "Devolução (UP)", "FTE", "Produtividade (UP/FTE)"];
+    
+    const csvData = consolidatedTableData.map((item: any) => {
+      const valor = visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0);
+      const up = visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0);
+      const produtividade = item.FTE > 0 ? (up / item.FTE).toFixed(0) : "-";
+      
+      return [
+        `"${item.Cliente}"`,
+        `"${item.Supervisor}"`,
+        `"${item.Grupo_do_Produto}"`,
+        valor.toFixed(2).replace('.', ','),
+        up.toFixed(0),
+        (item.FTE || 0).toFixed(2).replace('.', ','),
+        produtividade
+      ].join(";");
+    });
+    
+    const csvContent = [headers.join(";"), ...csvData].join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `detalhamento_lojas_${visao}_${selectedAno}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Consolidate table data by CNPJ
   const consolidatedTableData = Array.from(
@@ -138,6 +174,21 @@ export default function Home() {
     const valB = visao === "vendas" ? b.Valor_Liquido : b.Valor_Devolucao;
     return valB - valA;
   });
+
+  // Prepare Line Chart Data (Evolução Mensal)
+  const mesesNomes = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const evolucaoMensal = Array.from(
+    filteredData.reduce((acc, item) => {
+      const mes = item.Mes;
+      if (!acc.has(mes)) {
+        acc.set(mes, { name: mesesNomes[mes - 1], mesNum: mes, Valor: 0, UP: 0 });
+      }
+      const row = acc.get(mes);
+      row.Valor += visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0);
+      row.UP += visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0);
+      return acc;
+    }, new Map()).values()
+  ).sort((a: any, b: any) => a.mesNum - b.mesNum);
 
   // Prepare chart data
   const topSupervisores = Array.from(
@@ -249,7 +300,7 @@ export default function Home() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           <Card className="border-l-4 border-l-[#1A7B3E] cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-slate-500">{visao === "vendas" ? "Venda Líquida (R$)" : "Devoluções (R$)"}</CardTitle>
@@ -304,10 +355,50 @@ export default function Home() {
               </p>
             </CardContent>
           </Card>
+
+          <Card className="border-l-4 border-l-orange-500 cursor-pointer hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">% Devoluções</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">
+                {percentualDevolucao}%
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Sobre a Venda Bruta</p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-slate-800">Evolução Mensal ({visao === "vendas" ? "Vendas" : "Devoluções"})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={evolucaoMensal} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`} />
+                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k UP`} />
+                    <Tooltip 
+                      formatter={(value: number, name: string) => {
+                        if (name === "Valor (R$)") return [new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value), name];
+                        return [new Intl.NumberFormat('pt-BR').format(value) + " UP", name];
+                      }}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                    <Line yAxisId="left" type="monotone" dataKey="Valor" name="Valor (R$)" stroke="#1A7B3E" strokeWidth={3} dot={{ r: 4, fill: "#1A7B3E", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
+                    <Line yAxisId="right" type="monotone" dataKey="UP" name="Volume (UP)" stroke="#F2C010" strokeWidth={3} dot={{ r: 4, fill: "#F2C010", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>Top 5 Supervisores ({visao === "vendas" ? "Venda R$" : "Devoluções R$"})</CardTitle>
@@ -355,8 +446,15 @@ export default function Home() {
 
         {/* Data Table */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Detalhamento por Loja (CNPJ)</CardTitle>
+            <button 
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-sm font-medium transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              Exportar CSV
+            </button>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
