@@ -74,6 +74,33 @@ export default function Home() {
   const totalVendaRS = filteredData.reduce((sum, item) => sum + (visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0)), 0);
   const totalVendaUP = filteredData.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
   const totalFTE = filteredData.reduce((sum, item) => sum + (item.FTE || 0), 0);
+
+  // Calculate YoY Growth
+  let yoyGrowth = "N/A";
+  let isPositiveGrowth = true;
+  if (selectedAno !== "all") {
+    const currentYear = parseInt(selectedAno);
+    const previousYear = currentYear - 1;
+    
+    // Filter data for previous year with same other filters
+    const previousYearData = data.filter(item => {
+      if (String(item.Ano) !== String(previousYear)) return false;
+      if (selectedSupervisor !== "all" && item.Supervisor !== selectedSupervisor) return false;
+      if (selectedPerfil !== "all" && item.Perfil !== selectedPerfil) return false;
+      if (selectedMes !== "all" && String(item.Mes) !== selectedMes) return false;
+      if (selectedGrupo !== "all" && item.Grupo_do_Produto !== selectedGrupo) return false;
+      if (selectedEstado !== "all" && item.estado !== selectedEstado) return false;
+      return true;
+    });
+
+    const previousTotalVendaRS = previousYearData.reduce((sum, item) => sum + (visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0)), 0);
+    
+    if (previousTotalVendaRS > 0) {
+      const growth = ((totalVendaRS - previousTotalVendaRS) / previousTotalVendaRS) * 100;
+      yoyGrowth = growth.toFixed(1);
+      isPositiveGrowth = growth >= 0;
+    }
+  }
   
   // Calculate Devolucoes %
   const totalVendaBrutaRS = filteredData.reduce((sum, item) => sum + (item.Valor_Liquido || 0) + (item.Valor_Devolucao || 0), 0);
@@ -341,7 +368,7 @@ export default function Home() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
           <Card className="border-l-4 border-l-[#1A7B3E] cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-slate-500">{visao === "vendas" ? "Venda Líquida (R$)" : "Devoluções (R$)"}</CardTitle>
@@ -353,6 +380,21 @@ export default function Home() {
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 {selectedAno === '2026' ? `Atingimento: ${atingimentoRS}% do Orçamento 2026` : 'Comparativo não aplicável (Selecione 2026)'}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">Crescimento YoY</CardTitle>
+              <TrendingUp className={`h-4 w-4 ${isPositiveGrowth ? 'text-blue-500' : 'text-red-500'}`} />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${yoyGrowth !== "N/A" ? (isPositiveGrowth ? 'text-blue-600' : 'text-red-600') : 'text-slate-900'}`}>
+                {yoyGrowth !== "N/A" ? `${isPositiveGrowth ? '+' : ''}${yoyGrowth}%` : "N/A"}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {selectedAno !== "all" ? `vs ${parseInt(selectedAno) - 1}` : "Selecione um ano"}
               </p>
             </CardContent>
           </Card>
