@@ -83,24 +83,61 @@ export default function Home() {
   // Calculate YoY Growth
   let yoyGrowth = "N/A";
   let isPositiveGrowth = true;
+  const [vendas2024, setVendas2024] = useState<number[]>([]);
+  
+  useEffect(() => {
+    fetch("/data.json")
+      .then(res => res.json())
+      .then(jsonData => {
+        if (jsonData.vendas_2024) {
+          setVendas2024(jsonData.vendas_2024);
+        }
+      });
+  }, []);
+
   if (selectedAno !== "all") {
     const currentYear = parseInt(selectedAno);
     const previousYear = currentYear - 1;
     
-    // Filter data for previous year with same other filters
-    const previousYearData = data.filter(item => {
-      if (String(item.Ano) !== String(previousYear)) return false;
-      if (!selectedSupervisor.includes("all") && !selectedSupervisor.includes(item.Supervisor)) return false;
-      if (!selectedPerfil.includes("all") && !selectedPerfil.includes(item.Perfil)) return false;
-      if (!selectedMes.includes("all") && !selectedMes.includes(String(item.Mes))) return false;
-      if (selectedGrupo !== "all" && item.Grupo_do_Produto !== selectedGrupo) return false;
-      if (!selectedEstado.includes("all") && !selectedEstado.includes(item.estado)) return false;
-      return true;
-    });
+    let previousTotalVendaRS = 0;
+    let canCompare = true;
 
-    const previousTotalVendaRS = previousYearData.reduce((sum, item) => sum + (visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0)), 0);
+    if (previousYear === 2024) {
+      // For 2024, we only have monthly totals. We can only compare if no specific supervisor, perfil, grupo, or estado is selected.
+      if (
+        selectedSupervisor.includes("all") &&
+        selectedPerfil.includes("all") &&
+        selectedGrupo === "all" &&
+        selectedEstado.includes("all") &&
+        visao === "vendas"
+      ) {
+        if (selectedMes.includes("all")) {
+          previousTotalVendaRS = vendas2024.reduce((a, b) => a + b, 0);
+        } else {
+          previousTotalVendaRS = selectedMes.reduce((sum, mesStr) => {
+            const mesIdx = parseInt(mesStr) - 1;
+            return sum + (vendas2024[mesIdx] || 0);
+          }, 0);
+        }
+      } else {
+        canCompare = false; // Cannot compare specific filters with 2024 data
+      }
+    } else {
+      // Filter data for previous year with same other filters
+      const previousYearData = data.filter(item => {
+        if (String(item.Ano) !== String(previousYear)) return false;
+        if (!selectedSupervisor.includes("all") && !selectedSupervisor.includes(item.Supervisor)) return false;
+        if (!selectedPerfil.includes("all") && !selectedPerfil.includes(item.Perfil)) return false;
+        if (!selectedMes.includes("all") && !selectedMes.includes(String(item.Mes))) return false;
+        if (selectedGrupo !== "all" && item.Grupo_do_Produto !== selectedGrupo) return false;
+        if (!selectedEstado.includes("all") && !selectedEstado.includes(item.estado)) return false;
+        return true;
+      });
+
+      previousTotalVendaRS = previousYearData.reduce((sum, item) => sum + (visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0)), 0);
+    }
     
-    if (previousTotalVendaRS > 0) {
+    if (canCompare && previousTotalVendaRS > 0) {
       const growth = ((totalVendaRS - previousTotalVendaRS) / previousTotalVendaRS) * 100;
       yoyGrowth = growth.toFixed(1);
       isPositiveGrowth = growth >= 0;
@@ -303,6 +340,33 @@ export default function Home() {
       return acc;
     }, new Map()).values()
   ).sort((a: any, b: any) => a.mesNum - b.mesNum);
+
+  // Prepare Previsto vs Realizado Data (2026)
+  let previstoVsRealizadoData: any[] = [];
+  if (selectedAno === "2026" && orcamento && visao === "vendas") {
+    // We have the total budget for the year. Let's assume it's evenly distributed across 12 months for the chart,
+    // or we just show a single bar comparison if "Todos os Meses" is selected.
+    if (selectedMes.includes("all")) {
+      previstoVsRealizadoData = [
+        {
+          name: "Acumulado 2026",
+          Realizado: totalVendaRS,
+          Previsto: metaTotalRS
+        }
+      ];
+    } else {
+      // If specific months are selected, we calculate the proportional budget for those months
+      const numMeses = selectedMes.length;
+      const proportionalBudget = (metaTotalRS / 12) * numMeses;
+      previstoVsRealizadoData = [
+        {
+          name: `Meses Selecionados (${numMeses})`,
+          Realizado: totalVendaRS,
+          Previsto: proportionalBudget
+        }
+      ];
+    }
+  }
 
   // Prepare chart data
   const topSupervisores = Array.from(
@@ -566,6 +630,32 @@ export default function Home() {
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {previstoVsRealizadoData.length > 0 && (
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold text-slate-800">Previsto vs Realizado (Orçamento 2026)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[150px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={previstoVsRealizadoData} layout="vertical" margin={{ top: 20, right: 30, left: 150, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`} />
+                      <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} />
+                      <Tooltip 
+                        formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                      <Bar dataKey="Previsto" fill="#F2C010" radius={[0, 4, 4, 0]} barSize={30} />
+                      <Bar dataKey="Realizado" fill="#1A7B3E" radius={[0, 4, 4, 0]} barSize={30} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="lg:col-span-3">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-slate-800">Evolução Mensal ({visao === "vendas" ? "Vendas" : "Devoluções"})</CardTitle>
