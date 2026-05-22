@@ -99,6 +99,46 @@ export default function Home() {
   }
   const atingimentoRS = metaTotalRS > 0 ? ((totalVendaRS / metaTotalRS) * 100).toFixed(1) : "0";
 
+  // Consolidate table data by CNPJ
+  const consolidatedTableData = Array.from(
+    filteredData.reduce((acc, item) => {
+      const key = item.CNPJ_clean || item.Cliente;
+      if (!acc.has(key)) {
+        acc.set(key, {
+          Cliente: item.Cliente,
+          Supervisor: item.Supervisor,
+          Grupo_do_Produto: selectedGrupo !== "all" ? item.Grupo_do_Produto : "Múltiplos",
+          Valor_Liquido: 0,
+          UP_Liquida: 0,
+          Valor_Devolucao: 0,
+          UP_Devolucao: 0,
+          FTE: item.FTE || 0 // FTE is per CNPJ, so we just take it once
+        });
+      }
+      const row = acc.get(key);
+      row.Valor_Liquido += (item.Valor_Liquido || 0);
+      row.UP_Liquida += (item.UP_Liquida || 0);
+      row.Valor_Devolucao += (item.Valor_Devolucao || 0);
+      row.UP_Devolucao += (item.UP_Devolucao || 0);
+      
+      // If filtering by a specific product, show it. Otherwise, if a client has multiple products, show "Múltiplos"
+      if (selectedGrupo === "all" && row.Grupo_do_Produto !== "Múltiplos" && row.Grupo_do_Produto !== item.Grupo_do_Produto) {
+        row.Grupo_do_Produto = "Múltiplos";
+      } else if (selectedGrupo === "all" && row.Grupo_do_Produto === "Múltiplos" && acc.get(key)._firstProduct === undefined) {
+         acc.get(key)._firstProduct = item.Grupo_do_Produto;
+         row.Grupo_do_Produto = item.Grupo_do_Produto;
+      } else if (selectedGrupo === "all" && row.Grupo_do_Produto !== "Múltiplos" && acc.get(key)._firstProduct !== item.Grupo_do_Produto) {
+         row.Grupo_do_Produto = "Múltiplos";
+      }
+
+      return acc;
+    }, new Map()).values()
+  ).sort((a: any, b: any) => {
+    const valA = visao === "vendas" ? a.Valor_Liquido : a.Valor_Devolucao;
+    const valB = visao === "vendas" ? b.Valor_Liquido : b.Valor_Devolucao;
+    return valB - valA;
+  });
+
   // Prepare chart data
   const topSupervisores = Array.from(
     filteredData.reduce((acc, item) => {
@@ -333,7 +373,7 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredData.slice(0, 10).map((item, idx) => (
+                  {consolidatedTableData.slice(0, 10).map((item: any, idx: number) => (
                     <tr key={idx} className="border-b hover:bg-slate-50">
                       <td className="px-4 py-3 font-medium text-slate-900 truncate max-w-[200px]">{item.Cliente}</td>
                       <td className="px-4 py-3 text-slate-600">{item.Supervisor}</td>
