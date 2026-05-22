@@ -68,7 +68,23 @@ export default function Home() {
   const totalVendaUP = filteredData.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
   const totalFTE = filteredData.reduce((sum, item) => sum + (item.FTE || 0), 0);
   
-  const roiUP = totalFTE > 0 ? (totalVendaUP / totalFTE).toFixed(2) : "0";
+  // Produtividade (UP / Pessoas)
+  // Dados manuais de pessoas para 2026: Jan=198, Fev=197, Mar=182, Abr=176
+  // Maio em diante usa o FTE atual (aprox 184)
+  let totalPessoas = 0;
+  if (selectedAno === "2026") {
+    if (selectedMes === "1") totalPessoas = 198;
+    else if (selectedMes === "2") totalPessoas = 197;
+    else if (selectedMes === "3") totalPessoas = 182;
+    else if (selectedMes === "4") totalPessoas = 176;
+    else if (selectedMes === "5") totalPessoas = totalFTE; // Maio usa o FTE
+    else if (selectedMes === "all") {
+      // Média de pessoas no ano até agora
+      totalPessoas = (198 + 197 + 182 + 176 + totalFTE) / 5;
+    }
+  }
+  
+  const produtividadeUP = totalPessoas > 0 ? (totalVendaUP / totalPessoas).toFixed(0) : "N/A";
   
   // Orçamento 2026
   let metaTotalRS = 0;
@@ -112,7 +128,7 @@ export default function Home() {
         {/* Header & Filters */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border-t-4 border-t-[#1A7B3E]">
           <div className="flex items-center gap-4">
-            <img src="/manus-storage/logo_extract-1_8d7ac483.png" alt="Preferenza Logo" className="h-16 object-contain" />
+            <img src="/manus-storage/Logo_64c854cf.jpg" alt="Preferenza Logo" className="h-16 object-contain" />
             <div>
               <h1 className="text-3xl font-bold text-slate-900">Dashboard Preferenza</h1>
               <p className="text-slate-500 mt-1">Visão Integrada: Vendas, Metas e Força de Trabalho</p>
@@ -236,14 +252,16 @@ export default function Home() {
 
           <Card className="border-l-4 border-l-slate-800 cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">ROI da Mão de Obra</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-500">Produtividade</CardTitle>
               <Briefcase className="h-4 w-4 text-slate-800" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-slate-900">
-                {roiUP}
+                {produtividadeUP !== "N/A" ? `${new Intl.NumberFormat('pt-BR').format(Number(produtividadeUP))} UP` : "Selecione 2026"}
               </div>
-              <p className="text-xs text-slate-500 mt-1">UP geradas por FTE</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {selectedAno === "2026" && selectedMes !== "all" ? `Base: ${totalPessoas.toFixed(0)} pessoas` : "UP por pessoa (Média)"}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -311,7 +329,7 @@ export default function Home() {
                     <th className="px-4 py-3 text-right">{visao === "vendas" ? "Venda (R$)" : "Devolução (R$)"}</th>
                     <th className="px-4 py-3 text-right">{visao === "vendas" ? "Venda (UP)" : "Devolução (UP)"}</th>
                     <th className="px-4 py-3 text-right">FTE</th>
-                    <th className="px-4 py-3 text-right">ROI (UP/FTE)</th>
+                    <th className="px-4 py-3 text-right">Produtividade (UP/FTE)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -326,7 +344,7 @@ export default function Home() {
                       <td className="px-4 py-3 text-right">{new Intl.NumberFormat('pt-BR').format(visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0))}</td>
                       <td className="px-4 py-3 text-right">{(item.FTE || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-[#1A7B3E] font-medium">
-                        {item.FTE > 0 ? ((item.UP_Liquida || 0) / item.FTE).toFixed(0) : "-"}
+                        {item.FTE > 0 ? ((visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)) / item.FTE).toFixed(0) : "-"}
                       </td>
                     </tr>
                   ))}
