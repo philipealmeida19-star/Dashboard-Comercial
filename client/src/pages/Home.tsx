@@ -13,6 +13,10 @@ export default function Home() {
   
   const [selectedSupervisor, setSelectedSupervisor] = useState<string>("all");
   const [selectedPerfil, setSelectedPerfil] = useState<string>("all");
+  const [selectedAno, setSelectedAno] = useState<string>("2025");
+  const [selectedMes, setSelectedMes] = useState<string>("all");
+  const [anos, setAnos] = useState<string[]>([]);
+  const [meses, setMeses] = useState<string[]>([]);
 
   useEffect(() => {
     fetch("/data.json")
@@ -24,9 +28,13 @@ export default function Home() {
         
         const uniqueSupervisores = Array.from(new Set((jsonData.lojas || []).map((item: any) => item.Supervisor))).filter(Boolean).sort() as string[];
         const uniquePerfis = Array.from(new Set((jsonData.lojas || []).map((item: any) => item.Perfil))).filter(Boolean).sort() as string[];
+        const uniqueAnos = Array.from(new Set((jsonData.lojas || []).map((item: any) => String(item.Ano)))).filter(Boolean).sort() as string[];
+        const uniqueMeses = Array.from(new Set((jsonData.lojas || []).map((item: any) => String(item.Mes)))).filter(Boolean).sort((a, b) => Number(a) - Number(b)) as string[];
         
         setSupervisores(uniqueSupervisores);
         setPerfis(uniquePerfis);
+        setAnos(uniqueAnos);
+        setMeses(uniqueMeses);
       });
   }, []);
 
@@ -38,8 +46,14 @@ export default function Home() {
     if (selectedPerfil !== "all") {
       result = result.filter(item => item.Perfil === selectedPerfil);
     }
+    if (selectedAno !== "all") {
+      result = result.filter(item => String(item.Ano) === selectedAno);
+    }
+    if (selectedMes !== "all") {
+      result = result.filter(item => String(item.Mes) === selectedMes);
+    }
     setFilteredData(result);
-  }, [selectedSupervisor, selectedPerfil, data]);
+  }, [selectedSupervisor, selectedPerfil, selectedAno, selectedMes, data]);
 
   // Calculate KPIs
   const totalVendaRS = filteredData.reduce((sum, item) => sum + (item.Valor_Liquido || 0), 0);
@@ -88,7 +102,31 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="flex gap-4 w-full md:w-auto">
+          <div className="flex flex-wrap gap-4 w-full md:w-auto justify-end">
+            <Select value={selectedAno} onValueChange={setSelectedAno}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Anos</SelectItem>
+                {anos.map(ano => (
+                  <SelectItem key={ano} value={ano}>{ano}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedMes} onValueChange={setSelectedMes}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Mês" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Meses</SelectItem>
+                {meses.map(mes => (
+                  <SelectItem key={mes} value={mes}>{`Mês ${mes}`}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="Supervisor" />
@@ -103,12 +141,12 @@ export default function Home() {
 
             <Select value={selectedPerfil} onValueChange={setSelectedPerfil}>
               <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Perfil (Rede)" />
+                <SelectValue placeholder="Perfil" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os Perfis</SelectItem>
-                {perfis.map(p => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                {perfis.map(perfil => (
+                  <SelectItem key={perfil} value={perfil}>{perfil}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -126,7 +164,9 @@ export default function Home() {
               <div className="text-2xl font-bold text-slate-900">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVendaRS)}
               </div>
-              <p className="text-xs text-slate-500 mt-1">Atingimento: {atingimentoRS}% do Orçamento 2026</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {selectedAno === '2026' ? `Atingimento: ${atingimentoRS}% do Orçamento 2026` : 'Comparativo não aplicável (Selecione 2026)'}
+              </p>
             </CardContent>
           </Card>
 
