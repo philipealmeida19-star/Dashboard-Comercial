@@ -16,10 +16,12 @@ export default function Home() {
   const [selectedAno, setSelectedAno] = useState<string>("2025");
   const [selectedMes, setSelectedMes] = useState<string>("all");
   const [selectedGrupo, setSelectedGrupo] = useState<string>("all");
+  const [selectedEstado, setSelectedEstado] = useState<string>("all");
   const [visao, setVisao] = useState<string>("vendas"); // "vendas" ou "devolucoes"
   const [anos, setAnos] = useState<string[]>([]);
   const [meses, setMeses] = useState<string[]>([]);
   const [grupos, setGrupos] = useState<string[]>([]);
+  const [estados, setEstados] = useState<string[]>([]);
 
   useEffect(() => {
     fetch("/data.json")
@@ -34,12 +36,14 @@ export default function Home() {
         const uniqueAnos = Array.from(new Set((jsonData.lojas || []).map((item: any) => String(item.Ano)))).filter(Boolean).sort() as string[];
         const uniqueMeses = Array.from(new Set((jsonData.lojas || []).map((item: any) => String(item.Mes)))).filter(Boolean).sort((a, b) => Number(a) - Number(b)) as string[];
         const uniqueGrupos = Array.from(new Set((jsonData.lojas || []).map((item: any) => item.Grupo_do_Produto))).filter(Boolean).sort() as string[];
+        const uniqueEstados = Array.from(new Set((jsonData.lojas || []).map((item: any) => item.estado))).filter(Boolean).sort() as string[];
         
         setSupervisores(uniqueSupervisores);
         setPerfis(uniquePerfis);
         setAnos(uniqueAnos);
         setMeses(uniqueMeses);
         setGrupos(uniqueGrupos);
+        setEstados(uniqueEstados);
       });
   }, []);
 
@@ -60,8 +64,11 @@ export default function Home() {
     if (selectedGrupo !== "all") {
       result = result.filter(item => item.Grupo_do_Produto === selectedGrupo);
     }
+    if (selectedEstado !== "all") {
+      result = result.filter(item => item.estado === selectedEstado);
+    }
     setFilteredData(result);
-  }, [selectedSupervisor, selectedPerfil, selectedAno, selectedMes, selectedGrupo, data]);
+  }, [selectedSupervisor, selectedPerfil, selectedAno, selectedMes, selectedGrupo, selectedEstado, data]);
 
   // Calculate KPIs
   const totalVendaRS = filteredData.reduce((sum, item) => sum + (visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0)), 0);
@@ -169,7 +176,12 @@ export default function Home() {
 
       return acc;
     }, new Map()).values()
-  ).sort((a: any, b: any) => {
+  ).map((item: any) => {
+    // Calculate devolucoes percentage for visual alert
+    const vendaBruta = (item.Valor_Liquido || 0) + (item.Valor_Devolucao || 0);
+    item.Percentual_Devolucao = vendaBruta > 0 ? ((item.Valor_Devolucao || 0) / vendaBruta) * 100 : 0;
+    return item;
+  }).sort((a: any, b: any) => {
     const valA = visao === "vendas" ? a.Valor_Liquido : a.Valor_Devolucao;
     const valB = visao === "vendas" ? b.Valor_Liquido : b.Valor_Devolucao;
     return valB - valA;
@@ -208,6 +220,23 @@ export default function Home() {
       return acc;
     }, new Map())
   ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
+
+  // Prepare Mix de Produtos por Supervisor Data
+  const mixProdutosSupervisor = Array.from(
+    filteredData.reduce((acc, item) => {
+      const sup = item.Supervisor || "Sem Supervisor";
+      const grupo = item.Grupo_do_Produto || "Outros";
+      const val = visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0);
+      
+      if (!acc.has(sup)) {
+        acc.set(sup, { name: sup, total: 0 });
+      }
+      const row = acc.get(sup);
+      row[grupo] = (row[grupo] || 0) + val;
+      row.total += val;
+      return acc;
+    }, new Map()).values()
+  ).sort((a: any, b: any) => b.total - a.total).slice(0, 10); // Top 10 supervisores
 
   // Preferenza Brand Colors: Green (#1A7B3E), Yellow (#F2C010), Red (#C1272D)
   const COLORS = ['#1A7B3E', '#F2C010', '#C1272D', '#2E8B57', '#E6A800'];
@@ -293,6 +322,18 @@ export default function Home() {
                 <SelectItem value="all">Todos os Perfis</SelectItem>
                 {perfis.map(perfil => (
                   <SelectItem key={perfil} value={perfil}>{perfil}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedEstado} onValueChange={setSelectedEstado}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Estados</SelectItem>
+                {estados.map(estado => (
+                  <SelectItem key={estado} value={estado}>{estado}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -420,15 +461,15 @@ export default function Home() {
             <CardHeader>
               <CardTitle>Top 5 Redes/Perfis ({visao === "vendas" ? "Venda R$" : "Devoluções R$"})</CardTitle>
             </CardHeader>
-            <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
                     data={topPerfis}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
-                    outerRadius={100}
+                    outerRadius={80}
                     paddingAngle={5}
                     dataKey="value"
                   >
@@ -440,6 +481,30 @@ export default function Home() {
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Mix de Produtos por Supervisor ({visao === "vendas" ? "Venda R$" : "Devoluções R$"})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[400px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={mixProdutosSupervisor} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} angle={-45} textAnchor="end" />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`} />
+                    <Tooltip 
+                      formatter={(value: number, name: string) => [new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value), name]}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                    <Bar dataKey="PIZZA PREFERENZA" stackId="a" fill="#1A7B3E" radius={[0, 0, 4, 4]} />
+                    <Bar dataKey="PASTEL PREFERENZA" stackId="a" fill="#F2C010" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -471,21 +536,34 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
-                  {consolidatedTableData.slice(0, 10).map((item: any, idx: number) => (
-                    <tr key={idx} className="border-b hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium text-slate-900 truncate max-w-[200px]">{item.Cliente}</td>
-                      <td className="px-4 py-3 text-slate-600">{item.Supervisor}</td>
-                      <td className="px-4 py-3 text-slate-600">{item.Grupo_do_Produto}</td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0))}
-                      </td>
-                      <td className="px-4 py-3 text-right">{new Intl.NumberFormat('pt-BR').format(visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0))}</td>
-                      <td className="px-4 py-3 text-right">{(item.FTE || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-[#1A7B3E] font-medium">
-                        {item.FTE > 0 ? ((visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)) / item.FTE).toFixed(0) : "-"}
-                      </td>
-                    </tr>
-                  ))}
+                  {consolidatedTableData.slice(0, 10).map((item: any, idx: number) => {
+                    const isHighDevolucao = item.Percentual_Devolucao > 5;
+                    return (
+                      <tr key={idx} className={`border-b hover:bg-slate-50 ${isHighDevolucao ? 'bg-red-50/50' : ''}`}>
+                        <td className="px-4 py-3 font-medium text-slate-900 truncate max-w-[200px]">
+                          <div className="flex items-center gap-2">
+                            {item.Cliente}
+                            {isHighDevolucao && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title={`Devolução: ${item.Percentual_Devolucao.toFixed(1)}%`}>
+                                <AlertTriangle className="w-3 h-3 mr-1" />
+                                {item.Percentual_Devolucao.toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{item.Supervisor}</td>
+                        <td className="px-4 py-3 text-slate-600">{item.Grupo_do_Produto}</td>
+                        <td className={`px-4 py-3 text-right font-medium ${isHighDevolucao && visao === 'devolucoes' ? 'text-red-600' : ''}`}>
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0))}
+                        </td>
+                        <td className="px-4 py-3 text-right">{new Intl.NumberFormat('pt-BR').format(visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0))}</td>
+                        <td className="px-4 py-3 text-right">{(item.FTE || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right text-[#1A7B3E] font-medium">
+                          {item.FTE > 0 ? ((visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)) / item.FTE).toFixed(0) : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               <div className="p-4 text-center text-sm text-slate-500">
