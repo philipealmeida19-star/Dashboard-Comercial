@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { TrendingUp, Users, Target, Briefcase, Filter, AlertTriangle, Download, FileText } from "lucide-react";
 import html2canvas from "html2canvas";
@@ -13,12 +14,12 @@ export default function Home() {
   const [perfis, setPerfis] = useState<string[]>([]);
   const [orcamento, setOrcamento] = useState<any>(null);
   
-  const [selectedSupervisor, setSelectedSupervisor] = useState<string>("all");
-  const [selectedPerfil, setSelectedPerfil] = useState<string>("all");
+  const [selectedSupervisor, setSelectedSupervisor] = useState<string[]>(["all"]);
+  const [selectedPerfil, setSelectedPerfil] = useState<string[]>(["all"]);
   const [selectedAno, setSelectedAno] = useState<string>("2025");
-  const [selectedMes, setSelectedMes] = useState<string>("all");
+  const [selectedMes, setSelectedMes] = useState<string[]>(["all"]);
   const [selectedGrupo, setSelectedGrupo] = useState<string>("all");
-  const [selectedEstado, setSelectedEstado] = useState<string>("all");
+  const [selectedEstado, setSelectedEstado] = useState<string[]>(["all"]);
   const [visao, setVisao] = useState<string>("vendas"); // "vendas" ou "devolucoes"
   const [anos, setAnos] = useState<string[]>([]);
   const [meses, setMeses] = useState<string[]>([]);
@@ -53,23 +54,23 @@ export default function Home() {
 
   useEffect(() => {
     let result = data;
-    if (selectedSupervisor !== "all") {
-      result = result.filter(item => item.Supervisor === selectedSupervisor);
+    if (!selectedSupervisor.includes("all")) {
+      result = result.filter(item => selectedSupervisor.includes(item.Supervisor));
     }
-    if (selectedPerfil !== "all") {
-      result = result.filter(item => item.Perfil === selectedPerfil);
+    if (!selectedPerfil.includes("all")) {
+      result = result.filter(item => selectedPerfil.includes(item.Perfil));
     }
     if (selectedAno !== "all") {
       result = result.filter(item => String(item.Ano) === selectedAno);
     }
-    if (selectedMes !== "all") {
-      result = result.filter(item => String(item.Mes) === selectedMes);
+    if (!selectedMes.includes("all")) {
+      result = result.filter(item => selectedMes.includes(String(item.Mes)));
     }
     if (selectedGrupo !== "all") {
       result = result.filter(item => item.Grupo_do_Produto === selectedGrupo);
     }
-    if (selectedEstado !== "all") {
-      result = result.filter(item => item.estado === selectedEstado);
+    if (!selectedEstado.includes("all")) {
+      result = result.filter(item => selectedEstado.includes(item.estado));
     }
     setFilteredData(result);
   }, [selectedSupervisor, selectedPerfil, selectedAno, selectedMes, selectedGrupo, selectedEstado, data]);
@@ -89,11 +90,11 @@ export default function Home() {
     // Filter data for previous year with same other filters
     const previousYearData = data.filter(item => {
       if (String(item.Ano) !== String(previousYear)) return false;
-      if (selectedSupervisor !== "all" && item.Supervisor !== selectedSupervisor) return false;
-      if (selectedPerfil !== "all" && item.Perfil !== selectedPerfil) return false;
-      if (selectedMes !== "all" && String(item.Mes) !== selectedMes) return false;
+      if (!selectedSupervisor.includes("all") && !selectedSupervisor.includes(item.Supervisor)) return false;
+      if (!selectedPerfil.includes("all") && !selectedPerfil.includes(item.Perfil)) return false;
+      if (!selectedMes.includes("all") && !selectedMes.includes(String(item.Mes))) return false;
       if (selectedGrupo !== "all" && item.Grupo_do_Produto !== selectedGrupo) return false;
-      if (selectedEstado !== "all" && item.estado !== selectedEstado) return false;
+      if (!selectedEstado.includes("all") && !selectedEstado.includes(item.estado)) return false;
       return true;
     });
 
@@ -125,14 +126,21 @@ export default function Home() {
   // Maio em diante usa o FTE atual (aprox 184)
   let totalPessoas = 0;
   if (selectedAno === "2026") {
-    if (selectedMes === "1") totalPessoas = 198;
-    else if (selectedMes === "2") totalPessoas = 197;
-    else if (selectedMes === "3") totalPessoas = 182;
-    else if (selectedMes === "4") totalPessoas = 176;
-    else if (selectedMes === "5") totalPessoas = totalFTE; // Maio usa o FTE
-    else if (selectedMes === "all") {
+    if (selectedMes.includes("all")) {
       // Média de pessoas no ano até agora
       totalPessoas = (198 + 197 + 182 + 176 + totalFTE) / 5;
+    } else {
+      let sumPessoas = 0;
+      let countMeses = 0;
+      if (selectedMes.includes("1")) { sumPessoas += 198; countMeses++; }
+      if (selectedMes.includes("2")) { sumPessoas += 197; countMeses++; }
+      if (selectedMes.includes("3")) { sumPessoas += 182; countMeses++; }
+      if (selectedMes.includes("4")) { sumPessoas += 176; countMeses++; }
+      if (selectedMes.includes("5")) { sumPessoas += totalFTE; countMeses++; }
+      
+      if (countMeses > 0) {
+        totalPessoas = sumPessoas / countMeses;
+      }
     }
   }
   
@@ -197,7 +205,7 @@ export default function Home() {
         heightLeft -= pageHeight;
       }
       
-      pdf.save(`Dashboard_Preferenza_${selectedAno}_${selectedMes === 'all' ? 'Anual' : 'Mes_'+selectedMes}.pdf`);
+      pdf.save(`Dashboard_Preferenza_${selectedAno}_${selectedMes.includes('all') ? 'Anual' : 'Meses_'+selectedMes.join('-')}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Ocorreu um erro ao gerar o PDF. Tente novamente.");
@@ -393,17 +401,14 @@ export default function Home() {
               </SelectContent>
             </Select>
 
-            <Select value={selectedMes} onValueChange={setSelectedMes}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Mês" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Meses</SelectItem>
-                {meses.map(mes => (
-                  <SelectItem key={mes} value={mes}>{`Mês ${mes}`}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-[200px]">
+              <MultiSelect
+                options={meses.map(mes => ({ label: `Mês ${mes}`, value: mes }))}
+                selected={selectedMes}
+                onChange={setSelectedMes}
+                placeholder="Todos os Meses"
+              />
+            </div>
 
             <Select value={selectedGrupo} onValueChange={setSelectedGrupo}>
               <SelectTrigger className="w-[200px]">
@@ -417,41 +422,32 @@ export default function Home() {
               </SelectContent>
             </Select>
 
-            <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Supervisor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Supervisores</SelectItem>
-                {supervisores.map(sup => (
-                  <SelectItem key={sup} value={sup}>{sup}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-[250px]">
+              <MultiSelect
+                options={supervisores.map(sup => ({ label: sup, value: sup }))}
+                selected={selectedSupervisor}
+                onChange={setSelectedSupervisor}
+                placeholder="Todos os Supervisores"
+              />
+            </div>
 
-            <Select value={selectedPerfil} onValueChange={setSelectedPerfil}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Perfil" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Perfis</SelectItem>
-                {perfis.map(perfil => (
-                  <SelectItem key={perfil} value={perfil}>{perfil}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-[200px]">
+              <MultiSelect
+                options={perfis.map(perfil => ({ label: perfil, value: perfil }))}
+                selected={selectedPerfil}
+                onChange={setSelectedPerfil}
+                placeholder="Todos os Perfis"
+              />
+            </div>
 
-            <Select value={selectedEstado} onValueChange={setSelectedEstado}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Estados</SelectItem>
-                {estados.map(estado => (
-                  <SelectItem key={estado} value={estado}>{estado}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-[200px]">
+              <MultiSelect
+                options={estados.map(estado => ({ label: estado, value: estado }))}
+                selected={selectedEstado}
+                onChange={setSelectedEstado}
+                placeholder="Todos os Estados"
+              />
+            </div>
           </div>
         </div>
 
