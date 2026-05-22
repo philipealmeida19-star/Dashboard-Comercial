@@ -1,120 +1,264 @@
-import { DashboardLayout } from "@/components/DashboardLayout";
-import { KPICard } from "@/components/KPICard";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { kpisGerais, vendasPorProduto } from "@/lib/data";
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { Users, TrendingUp, Target, Briefcase } from "lucide-react";
 
 export default function Home() {
+  const [data, setData] = useState<any[]>([]);
+  const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [supervisores, setSupervisores] = useState<string[]>([]);
+  const [perfis, setPerfis] = useState<string[]>([]);
+  const [orcamento, setOrcamento] = useState<any>(null);
+  
+  const [selectedSupervisor, setSelectedSupervisor] = useState<string>("all");
+  const [selectedPerfil, setSelectedPerfil] = useState<string>("all");
+
+  useEffect(() => {
+    fetch("/data.json")
+      .then(res => res.json())
+      .then(jsonData => {
+        setData(jsonData.lojas || []);
+        setFilteredData(jsonData.lojas || []);
+        setOrcamento(jsonData.orcamento_2026 || null);
+        
+        const uniqueSupervisores = Array.from(new Set((jsonData.lojas || []).map((item: any) => item.Supervisor))).filter(Boolean).sort() as string[];
+        const uniquePerfis = Array.from(new Set((jsonData.lojas || []).map((item: any) => item.Perfil))).filter(Boolean).sort() as string[];
+        
+        setSupervisores(uniqueSupervisores);
+        setPerfis(uniquePerfis);
+      });
+  }, []);
+
+  useEffect(() => {
+    let result = data;
+    if (selectedSupervisor !== "all") {
+      result = result.filter(item => item.Supervisor === selectedSupervisor);
+    }
+    if (selectedPerfil !== "all") {
+      result = result.filter(item => item.Perfil === selectedPerfil);
+    }
+    setFilteredData(result);
+  }, [selectedSupervisor, selectedPerfil, data]);
+
+  // Calculate KPIs
+  const totalVendaRS = filteredData.reduce((sum, item) => sum + (item.Valor_Liquido || 0), 0);
+  const totalVendaUP = filteredData.reduce((sum, item) => sum + (item.UP_Liquida || 0), 0);
+  const totalFTE = filteredData.reduce((sum, item) => sum + (item.FTE || 0), 0);
+  
+  const roiUP = totalFTE > 0 ? (totalVendaUP / totalFTE).toFixed(2) : "0";
+  
+  // Orçamento 2026
+  const metaTotalRS = orcamento ? orcamento.total : 0;
+  const atingimentoRS = metaTotalRS > 0 ? ((totalVendaRS / metaTotalRS) * 100).toFixed(1) : "0";
+
+  // Prepare chart data
+  const topSupervisores = Array.from(
+    filteredData.reduce((acc, item) => {
+      const sup = item.Supervisor || "Sem Supervisor";
+      acc.set(sup, (acc.get(sup) || 0) + (item.Valor_Liquido || 0));
+      return acc;
+    }, new Map())
+  ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
+
+  const topPerfis = Array.from(
+    filteredData.reduce((acc, item) => {
+      const perfil = item.Perfil || "Sem Perfil";
+      acc.set(perfil, (acc.get(perfil) || 0) + (item.Valor_Liquido || 0));
+      return acc;
+    }, new Map())
+  ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
+
+  // Preferenza Brand Colors: Green (#1A7B3E), Yellow (#F2C010), Red (#C1272D)
+  const COLORS = ['#1A7B3E', '#F2C010', '#C1272D', '#2E8B57', '#E6A800'];
+
   return (
-    <DashboardLayout>
-      <div className="space-y-8">
-        {/* Hero Section */}
-        <div className="relative rounded-2xl overflow-hidden h-48 md:h-64 shadow-lg group">
-          <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-black/20 z-10" />
-          <img 
-            src="/images/hero-pizza-making.jpg" 
-            alt="Produção Artesanal" 
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-          />
-          <div className="relative z-20 h-full flex flex-col justify-center px-8 md:px-12">
-            <h1 className="text-3xl md:text-4xl font-serif font-bold text-white mb-2">
-              Visão Geral Executiva
-            </h1>
-            <p className="text-white/80 max-w-xl text-sm md:text-base font-light">
-              Acompanhamento estratégico dos indicadores de performance da Massas Preferenza.
-              Foco na meta de R$ 35M para 2026.
-            </p>
+    <div className="min-h-screen bg-slate-50 p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
+        {/* Header & Filters */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border-t-4 border-t-[#1A7B3E]">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-[#1A7B3E] rounded-full flex items-center justify-center text-white font-bold text-xl shadow-md">
+              P
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Dashboard Preferenza</h1>
+              <p className="text-slate-500 mt-1">Visão Integrada: Vendas, Metas e Força de Trabalho</p>
+            </div>
+          </div>
+          
+          <div className="flex gap-4 w-full md:w-auto">
+            <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Supervisor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Supervisores</SelectItem>
+                {supervisores.map(sup => (
+                  <SelectItem key={sup} value={sup}>{sup}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedPerfil} onValueChange={setSelectedPerfil}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Perfil (Rede)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Perfis</SelectItem>
+                {perfis.map(p => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        {/* KPIs Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {kpisGerais.map((kpi) => (
-            <KPICard
-              key={kpi.id}
-              title={kpi.label}
-              value={kpi.value}
-              iconName={kpi.icon}
-              trend={kpi.trend}
-              change={kpi.change}
-              description={kpi.description}
-            />
-          ))}
-        </div>
-
-        {/* Charts Section */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          {/* Sales Distribution */}
-          <Card className="col-span-3 border-none shadow-sm">
-            <CardHeader>
-              <CardTitle className="font-serif">Mix de Produtos</CardTitle>
-              <CardDescription>Distribuição de faturamento (2024)</CardDescription>
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="border-l-4 border-l-[#1A7B3E] cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">Venda Líquida (R$)</CardTitle>
+              <TrendingUp className="h-4 w-4 text-[#1A7B3E]" />
             </CardHeader>
             <CardContent>
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={vendasPorProduto}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {vendasPorProduto.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="text-2xl font-bold text-slate-900">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalVendaRS)}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Atingimento: {atingimentoRS}% do Orçamento 2026</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-[#F2C010] cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">Venda Líquida (UP)</CardTitle>
+              <Target className="h-4 w-4 text-[#F2C010]" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">
+                {new Intl.NumberFormat('pt-BR').format(totalVendaUP)} UP
               </div>
             </CardContent>
           </Card>
 
-          {/* Strategic Goals */}
-          <Card className="col-span-4 border-none shadow-sm bg-primary text-primary-foreground overflow-hidden relative">
-            <div className="absolute inset-0 bg-[url('/images/dashboard-bg-texture.jpg')] opacity-10 mix-blend-overlay" />
-            <CardHeader className="relative z-10">
-              <CardTitle className="font-serif text-2xl text-white">Objetivo 2026</CardTitle>
-              <CardDescription className="text-white/70">Crescimento Acelerado</CardDescription>
+          <Card className="border-l-4 border-l-[#C1272D] cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">Força de Trabalho (FTE)</CardTitle>
+              <Users className="h-4 w-4 text-[#C1272D]" />
             </CardHeader>
-            <CardContent className="relative z-10 space-y-6">
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className="text-sm font-medium text-white/60 mb-1">Meta de Faturamento</p>
-                  <p className="text-4xl font-bold font-serif">R$ 35.000.000</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-white/60 mb-1">Progresso Atual</p>
-                  <p className="text-2xl font-bold">51%</p>
-                </div>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">
+                {totalFTE.toFixed(1)}
               </div>
-              
-              <div className="w-full bg-white/20 rounded-full h-3 overflow-hidden">
-                <div className="bg-white h-full rounded-full" style={{ width: '51%' }} />
-              </div>
+              <p className="text-xs text-slate-500 mt-1">Pessoas Efetivas</p>
+            </CardContent>
+          </Card>
 
-              <div className="grid grid-cols-2 gap-4 pt-4">
-                <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-                  <p className="text-xs text-white/60 uppercase tracking-wider mb-1">Capacidade Pizza</p>
-                  <p className="text-xl font-bold">65 TN/mês</p>
-                </div>
-                <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-                  <p className="text-xs text-white/60 uppercase tracking-wider mb-1">Capacidade Pastel</p>
-                  <p className="text-xl font-bold">25 TN/mês</p>
-                </div>
+          <Card className="border-l-4 border-l-slate-800 cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">ROI da Mão de Obra</CardTitle>
+              <Briefcase className="h-4 w-4 text-slate-800" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">
+                {roiUP}
               </div>
+              <p className="text-xs text-slate-500 mt-1">UP geradas por FTE</p>
             </CardContent>
           </Card>
         </div>
+
+        {/* Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Top 5 Supervisores (Venda R$)</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topSupervisores} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" tickFormatter={(value) => `R$ ${(value/1000000).toFixed(1)}M`} />
+                  <YAxis dataKey="name" type="category" width={150} tick={{fontSize: 12}} />
+                  <Tooltip formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)} />
+                  <Bar dataKey="value" fill="#1A7B3E" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Top 5 Redes/Perfis (Venda R$)</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={topPerfis}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {topPerfis.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Data Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Detalhamento por Loja (CNPJ)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3">Cliente</th>
+                    <th className="px-4 py-3">Supervisor</th>
+                    <th className="px-4 py-3 text-right">Venda (R$)</th>
+                    <th className="px-4 py-3 text-right">Venda (UP)</th>
+                    <th className="px-4 py-3 text-right">FTE</th>
+                    <th className="px-4 py-3 text-right">ROI (UP/FTE)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredData.slice(0, 10).map((item, idx) => (
+                    <tr key={idx} className="border-b hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-900 truncate max-w-[200px]">{item.Cliente}</td>
+                      <td className="px-4 py-3 text-slate-600">{item.Supervisor}</td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.Valor_Liquido || 0)}
+                      </td>
+                      <td className="px-4 py-3 text-right">{new Intl.NumberFormat('pt-BR').format(item.UP_Liquida || 0)}</td>
+                      <td className="px-4 py-3 text-right">{(item.FTE || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-[#1A7B3E] font-medium">
+                        {item.FTE > 0 ? ((item.UP_Liquida || 0) / item.FTE).toFixed(0) : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="p-4 text-center text-sm text-slate-500">
+                Mostrando as 10 primeiras lojas do filtro atual.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
       </div>
-    </DashboardLayout>
+    </div>
   );
 }
