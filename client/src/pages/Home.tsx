@@ -16,6 +16,7 @@ export default function Home() {
   const [selectedAno, setSelectedAno] = useState<string>("2025");
   const [selectedMes, setSelectedMes] = useState<string>("all");
   const [selectedGrupo, setSelectedGrupo] = useState<string>("all");
+  const [visao, setVisao] = useState<string>("vendas"); // "vendas" ou "devolucoes"
   const [anos, setAnos] = useState<string[]>([]);
   const [meses, setMeses] = useState<string[]>([]);
   const [grupos, setGrupos] = useState<string[]>([]);
@@ -63,8 +64,8 @@ export default function Home() {
   }, [selectedSupervisor, selectedPerfil, selectedAno, selectedMes, selectedGrupo, data]);
 
   // Calculate KPIs
-  const totalVendaRS = filteredData.reduce((sum, item) => sum + (item.Valor_Liquido || 0), 0);
-  const totalVendaUP = filteredData.reduce((sum, item) => sum + (item.UP_Liquida || 0), 0);
+  const totalVendaRS = filteredData.reduce((sum, item) => sum + (visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0)), 0);
+  const totalVendaUP = filteredData.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
   const totalFTE = filteredData.reduce((sum, item) => sum + (item.FTE || 0), 0);
   
   const roiUP = totalFTE > 0 ? (totalVendaUP / totalFTE).toFixed(2) : "0";
@@ -86,7 +87,8 @@ export default function Home() {
   const topSupervisores = Array.from(
     filteredData.reduce((acc, item) => {
       const sup = item.Supervisor || "Sem Supervisor";
-      acc.set(sup, (acc.get(sup) || 0) + (item.Valor_Liquido || 0));
+      const val = visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0);
+      acc.set(sup, (acc.get(sup) || 0) + val);
       return acc;
     }, new Map())
   ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
@@ -94,7 +96,8 @@ export default function Home() {
   const topPerfis = Array.from(
     filteredData.reduce((acc, item) => {
       const perfil = item.Perfil || "Sem Perfil";
-      acc.set(perfil, (acc.get(perfil) || 0) + (item.Valor_Liquido || 0));
+      const val = visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0);
+      acc.set(perfil, (acc.get(perfil) || 0) + val);
       return acc;
     }, new Map())
   ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
@@ -109,9 +112,7 @@ export default function Home() {
         {/* Header & Filters */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border-t-4 border-t-[#1A7B3E]">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-[#1A7B3E] rounded-full flex items-center justify-center text-white font-bold text-xl shadow-md">
-              P
-            </div>
+            <img src="/manus-storage/logo_extract-1_8d7ac483.png" alt="Preferenza Logo" className="h-16 object-contain" />
             <div>
               <h1 className="text-3xl font-bold text-slate-900">Dashboard Preferenza</h1>
               <p className="text-slate-500 mt-1">Visão Integrada: Vendas, Metas e Força de Trabalho</p>
@@ -119,6 +120,16 @@ export default function Home() {
           </div>
           
           <div className="flex flex-wrap gap-4 w-full md:w-auto justify-end">
+            <Select value={visao} onValueChange={setVisao}>
+              <SelectTrigger className="w-[150px] bg-slate-100 font-semibold">
+                <SelectValue placeholder="Visão" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="vendas">Vendas Líquidas</SelectItem>
+                <SelectItem value="devolucoes">Devoluções</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={selectedAno} onValueChange={setSelectedAno}>
               <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="Ano" />
@@ -185,7 +196,7 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="border-l-4 border-l-[#1A7B3E] cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">Venda Líquida (R$)</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-500">{visao === "vendas" ? "Venda Líquida (R$)" : "Devoluções (R$)"}</CardTitle>
               <TrendingUp className="h-4 w-4 text-[#1A7B3E]" />
             </CardHeader>
             <CardContent>
@@ -200,7 +211,7 @@ export default function Home() {
 
           <Card className="border-l-4 border-l-[#F2C010] cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">Venda Líquida (UP)</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-500">{visao === "vendas" ? "Venda Líquida (UP)" : "Devoluções (UP)"}</CardTitle>
               <Target className="h-4 w-4 text-[#F2C010]" />
             </CardHeader>
             <CardContent>
@@ -241,7 +252,7 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Top 5 Supervisores (Venda R$)</CardTitle>
+              <CardTitle>Top 5 Supervisores ({visao === "vendas" ? "Venda R$" : "Devoluções R$"})</CardTitle>
             </CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -258,7 +269,7 @@ export default function Home() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Top 5 Redes/Perfis (Venda R$)</CardTitle>
+              <CardTitle>Top 5 Redes/Perfis ({visao === "vendas" ? "Venda R$" : "Devoluções R$"})</CardTitle>
             </CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -297,8 +308,8 @@ export default function Home() {
                     <th className="px-4 py-3">Cliente</th>
                     <th className="px-4 py-3">Supervisor</th>
                     <th className="px-4 py-3">Produto</th>
-                    <th className="px-4 py-3 text-right">Venda (R$)</th>
-                    <th className="px-4 py-3 text-right">Venda (UP)</th>
+                    <th className="px-4 py-3 text-right">{visao === "vendas" ? "Venda (R$)" : "Devolução (R$)"}</th>
+                    <th className="px-4 py-3 text-right">{visao === "vendas" ? "Venda (UP)" : "Devolução (UP)"}</th>
                     <th className="px-4 py-3 text-right">FTE</th>
                     <th className="px-4 py-3 text-right">ROI (UP/FTE)</th>
                   </tr>
@@ -310,9 +321,9 @@ export default function Home() {
                       <td className="px-4 py-3 text-slate-600">{item.Supervisor}</td>
                       <td className="px-4 py-3 text-slate-600">{item.Grupo_do_Produto}</td>
                       <td className="px-4 py-3 text-right font-medium">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.Valor_Liquido || 0)}
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(visao === "vendas" ? (item.Valor_Liquido || 0) : (item.Valor_Devolucao || 0))}
                       </td>
-                      <td className="px-4 py-3 text-right">{new Intl.NumberFormat('pt-BR').format(item.UP_Liquida || 0)}</td>
+                      <td className="px-4 py-3 text-right">{new Intl.NumberFormat('pt-BR').format(visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0))}</td>
                       <td className="px-4 py-3 text-right">{(item.FTE || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-[#1A7B3E] font-medium">
                         {item.FTE > 0 ? ((item.UP_Liquida || 0) / item.FTE).toFixed(0) : "-"}
