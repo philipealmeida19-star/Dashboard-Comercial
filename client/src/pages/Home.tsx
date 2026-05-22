@@ -110,6 +110,11 @@ export default function Home() {
   // Calculate Ticket Médio
   const uniqueLojas = new Set(filteredData.map(item => item.CNPJ_clean || item.Cliente)).size;
   const ticketMedio = uniqueLojas > 0 ? totalVendaRS / uniqueLojas : 0;
+
+  // Calculate Frequência Média de Compras
+  // Assuming each row in filteredData represents a purchase/invoice
+  const totalCompras = filteredData.length;
+  const frequenciaMedia = uniqueLojas > 0 ? (totalCompras / uniqueLojas).toFixed(1) : "0.0";
   
   // Produtividade (UP / Pessoas)
   // Dados manuais de pessoas para 2026: Jan=198, Fev=197, Mar=182, Abr=176
@@ -382,7 +387,7 @@ export default function Home() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
           <Card className="border-l-4 border-l-[#1A7B3E] cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-slate-500">{visao === "vendas" ? "Venda Líquida (R$)" : "Devoluções (R$)"}</CardTitle>
@@ -466,16 +471,29 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="border-l-4 border-l-orange-500 cursor-pointer hover:shadow-md transition-shadow">
+          <Card className={`border-l-4 ${Number(percentualDevolucao) > 2 ? 'border-l-red-500' : 'border-l-orange-500'} cursor-pointer hover:shadow-md transition-shadow`}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-slate-500">% Devoluções</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <AlertTriangle className={`h-4 w-4 ${Number(percentualDevolucao) > 2 ? 'text-red-500' : 'text-orange-500'}`} />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${Number(percentualDevolucao) > 2 ? 'text-red-600' : 'text-slate-900'}`}>
+                {percentualDevolucao}%
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Meta: 2%</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-teal-500 cursor-pointer hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">Frequência</CardTitle>
+              <Target className="h-4 w-4 text-teal-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-slate-900">
-                {percentualDevolucao}%
+                {frequenciaMedia}x
               </div>
-              <p className="text-xs text-slate-500 mt-1">Sobre a Venda Bruta</p>
+              <p className="text-xs text-slate-500 mt-1">Compras por Loja</p>
             </CardContent>
           </Card>
         </div>
@@ -628,7 +646,7 @@ export default function Home() {
                 </thead>
                 <tbody>
                   {consolidatedTableData.slice(0, 10).map((item: any, idx: number) => {
-                    const isHighDevolucao = item.Percentual_Devolucao > 5;
+                    const isHighDevolucao = item.Percentual_Devolucao > 2;
                     return (
                       <tr key={idx} className={`border-b hover:bg-slate-50 ${isHighDevolucao ? 'bg-red-50/50' : ''}`}>
                         <td className="px-4 py-3 font-medium text-slate-900 truncate max-w-[200px]">
