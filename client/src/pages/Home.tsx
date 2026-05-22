@@ -375,6 +375,7 @@ export default function Home() {
                 </button>
               </div>
               <p className="text-slate-500 mt-1">Visão Integrada: Vendas, Metas e Força de Trabalho</p>
+              <p className="text-xs text-slate-400 mt-1">Última atualização: 22/05/2026 às 12:21</p>
             </div>
           </div>
           
