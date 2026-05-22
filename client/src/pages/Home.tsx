@@ -15,8 +15,10 @@ export default function Home() {
   const [selectedPerfil, setSelectedPerfil] = useState<string>("all");
   const [selectedAno, setSelectedAno] = useState<string>("2025");
   const [selectedMes, setSelectedMes] = useState<string>("all");
+  const [selectedGrupo, setSelectedGrupo] = useState<string>("all");
   const [anos, setAnos] = useState<string[]>([]);
   const [meses, setMeses] = useState<string[]>([]);
+  const [grupos, setGrupos] = useState<string[]>([]);
 
   useEffect(() => {
     fetch("/data.json")
@@ -30,11 +32,13 @@ export default function Home() {
         const uniquePerfis = Array.from(new Set((jsonData.lojas || []).map((item: any) => item.Perfil))).filter(Boolean).sort() as string[];
         const uniqueAnos = Array.from(new Set((jsonData.lojas || []).map((item: any) => String(item.Ano)))).filter(Boolean).sort() as string[];
         const uniqueMeses = Array.from(new Set((jsonData.lojas || []).map((item: any) => String(item.Mes)))).filter(Boolean).sort((a, b) => Number(a) - Number(b)) as string[];
+        const uniqueGrupos = Array.from(new Set((jsonData.lojas || []).map((item: any) => item.Grupo_do_Produto))).filter(Boolean).sort() as string[];
         
         setSupervisores(uniqueSupervisores);
         setPerfis(uniquePerfis);
         setAnos(uniqueAnos);
         setMeses(uniqueMeses);
+        setGrupos(uniqueGrupos);
       });
   }, []);
 
@@ -52,8 +56,11 @@ export default function Home() {
     if (selectedMes !== "all") {
       result = result.filter(item => String(item.Mes) === selectedMes);
     }
+    if (selectedGrupo !== "all") {
+      result = result.filter(item => item.Grupo_do_Produto === selectedGrupo);
+    }
     setFilteredData(result);
-  }, [selectedSupervisor, selectedPerfil, selectedAno, selectedMes, data]);
+  }, [selectedSupervisor, selectedPerfil, selectedAno, selectedMes, selectedGrupo, data]);
 
   // Calculate KPIs
   const totalVendaRS = filteredData.reduce((sum, item) => sum + (item.Valor_Liquido || 0), 0);
@@ -63,7 +70,16 @@ export default function Home() {
   const roiUP = totalFTE > 0 ? (totalVendaUP / totalFTE).toFixed(2) : "0";
   
   // Orçamento 2026
-  const metaTotalRS = orcamento ? orcamento.total : 0;
+  let metaTotalRS = 0;
+  if (orcamento) {
+    if (selectedGrupo === "PIZZA PREFERENZA") {
+      metaTotalRS = orcamento.pizza;
+    } else if (selectedGrupo === "PASTEL PREFERENZA") {
+      metaTotalRS = orcamento.pastel;
+    } else {
+      metaTotalRS = orcamento.total;
+    }
+  }
   const atingimentoRS = metaTotalRS > 0 ? ((totalVendaRS / metaTotalRS) * 100).toFixed(1) : "0";
 
   // Prepare chart data
@@ -123,6 +139,18 @@ export default function Home() {
                 <SelectItem value="all">Todos os Meses</SelectItem>
                 {meses.map(mes => (
                   <SelectItem key={mes} value={mes}>{`Mês ${mes}`}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedGrupo} onValueChange={setSelectedGrupo}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Grupo de Produto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Produtos</SelectItem>
+                {grupos.map(grupo => (
+                  <SelectItem key={grupo} value={grupo}>{grupo}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -268,6 +296,7 @@ export default function Home() {
                   <tr>
                     <th className="px-4 py-3">Cliente</th>
                     <th className="px-4 py-3">Supervisor</th>
+                    <th className="px-4 py-3">Produto</th>
                     <th className="px-4 py-3 text-right">Venda (R$)</th>
                     <th className="px-4 py-3 text-right">Venda (UP)</th>
                     <th className="px-4 py-3 text-right">FTE</th>
@@ -279,6 +308,7 @@ export default function Home() {
                     <tr key={idx} className="border-b hover:bg-slate-50">
                       <td className="px-4 py-3 font-medium text-slate-900 truncate max-w-[200px]">{item.Cliente}</td>
                       <td className="px-4 py-3 text-slate-600">{item.Supervisor}</td>
+                      <td className="px-4 py-3 text-slate-600">{item.Grupo_do_Produto}</td>
                       <td className="px-4 py-3 text-right font-medium">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.Valor_Liquido || 0)}
                       </td>
