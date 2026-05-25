@@ -161,11 +161,11 @@ export default function Home() {
   // Produtividade (UP / Pessoas)
   // Dados manuais de pessoas para 2026: Jan=198, Fev=197, Mar=182, Abr=176
   // Maio em diante usa o FTE atual (aprox 184)
-  let totalPessoas = 0;
+  let totalPessoasGeral = 0;
   if (selectedAno === "2026") {
     if (selectedMes.includes("all")) {
       // Média de pessoas no ano até agora
-      totalPessoas = (198 + 197 + 182 + 176 + totalFTE) / 5;
+      totalPessoasGeral = (198 + 197 + 182 + 176 + totalFTE) / 5;
     } else {
       let sumPessoas = 0;
       let countMeses = 0;
@@ -176,12 +176,50 @@ export default function Home() {
       if (selectedMes.includes("5")) { sumPessoas += totalFTE; countMeses++; }
       
       if (countMeses > 0) {
-        totalPessoas = sumPessoas / countMeses;
+        totalPessoasGeral = sumPessoas / countMeses;
       }
     }
   }
   
-  const produtividadeUP = totalPessoas > 0 ? (totalVendaUP / totalPessoas).toFixed(0) : "N/A";
+  // 1. PGP (Produtividade Geral Preferenza)
+  const pgpUP = totalPessoasGeral > 0 ? (totalVendaUP / totalPessoasGeral).toFixed(0) : "N/A";
+
+  // 2. PPP (Produtividade por Promotor)
+  // Venda Líquida (UP) apenas dos Perfis que possuem promotores alocados, dividida pela quantidade de promotores alocados
+  const [perfisComPromotor, setPerfisComPromotor] = useState<string[]>([]);
+  useEffect(() => {
+    fetch("/data.json")
+      .then(res => res.json())
+      .then(jsonData => {
+        if (jsonData.perfis_com_promotor) {
+          setPerfisComPromotor(jsonData.perfis_com_promotor);
+        }
+      });
+  }, []);
+
+  const vendasPerfisComPromotor = filteredData.filter(item => perfisComPromotor.includes(String(item.Perfil).trim().toUpperCase()));
+  const totalVendaUP_PPP = vendasPerfisComPromotor.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
+  // The allocation of promotores for these profiles is the sum of FTE for these profiles
+  const totalFTE_PPP = vendasPerfisComPromotor.reduce((sum, item) => sum + (item.FTE || 0), 0);
+  const pppUP = totalFTE_PPP > 0 ? (totalVendaUP_PPP / totalFTE_PPP).toFixed(0) : "N/A";
+
+  // 3. Produtividade por Perfil
+  // Venda Líquida (UP) de um Perfil específico dividida pela quantidade de promotores alocados especificamente naquele Perfil
+  // If a specific profile is selected, we show its productivity. If multiple or none, we show N/A or average.
+  let produtividadePerfilUP = "N/A";
+  let perfilName = "Selecione 1 Perfil";
+  if (selectedPerfil.length === 1 && selectedPerfil[0] !== "all") {
+    perfilName = selectedPerfil[0];
+    const vendasPerfil = filteredData.filter(item => item.Perfil === perfilName);
+    const totalVendaUP_Perfil = vendasPerfil.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
+    const totalFTE_Perfil = vendasPerfil.reduce((sum, item) => sum + (item.FTE || 0), 0);
+    produtividadePerfilUP = totalFTE_Perfil > 0 ? (totalVendaUP_Perfil / totalFTE_Perfil).toFixed(0) : "0";
+  } else if (selectedPerfil.length > 1 && !selectedPerfil.includes("all")) {
+    perfilName = "Múltiplos Perfis";
+    const totalVendaUP_Perfil = filteredData.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
+    const totalFTE_Perfil = filteredData.reduce((sum, item) => sum + (item.FTE || 0), 0);
+    produtividadePerfilUP = totalFTE_Perfil > 0 ? (totalVendaUP_Perfil / totalFTE_Perfil).toFixed(0) : "0";
+  }
   
   // Orçamento 2026
   let metaTotalRS = 0;
@@ -573,30 +611,47 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="border-l-4 border-l-[#C1272D] cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">Força de Trabalho (FTE)</CardTitle>
-              <Users className="h-4 w-4 text-[#C1272D]" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-slate-900">
-                {totalFTE.toFixed(1)}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Pessoas Efetivas</p>
-            </CardContent>
-          </Card>
-
           <Card className="border-l-4 border-l-slate-800 cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">Produtividade</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-500">PGP (Geral)</CardTitle>
               <Briefcase className="h-4 w-4 text-slate-800" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-slate-900">
-                {produtividadeUP !== "N/A" ? `${new Intl.NumberFormat('pt-BR').format(Number(produtividadeUP))} UP` : "Selecione 2026"}
+                {pgpUP !== "N/A" ? `${new Intl.NumberFormat('pt-BR').format(Number(pgpUP))} UP` : "Selecione 2026"}
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                {selectedAno === "2026" && selectedMes !== "all" ? `Base: ${totalPessoas.toFixed(0)} pessoas` : "UP por pessoa (Média)"}
+                {selectedAno === "2026" && !selectedMes.includes("all") ? `Base: ${totalPessoasGeral.toFixed(0)} pessoas` : "UP por pessoa (Média)"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-indigo-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">PPP (Promotor)</CardTitle>
+              <Users className="h-4 w-4 text-indigo-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">
+                {pppUP !== "N/A" ? `${new Intl.NumberFormat('pt-BR').format(Number(pppUP))} UP` : "N/A"}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Apenas perfis com promotor
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-teal-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">Produtividade Perfil</CardTitle>
+              <Target className="h-4 w-4 text-teal-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">
+                {produtividadePerfilUP !== "N/A" ? `${new Intl.NumberFormat('pt-BR').format(Number(produtividadePerfilUP))} UP` : "N/A"}
+              </div>
+              <p className="text-xs text-slate-500 mt-1 truncate" title={perfilName}>
+                {perfilName}
               </p>
             </CardContent>
           </Card>
