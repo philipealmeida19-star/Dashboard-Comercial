@@ -181,8 +181,17 @@ export default function Home() {
     }
   }
   
-  // 1. PGP (Produtividade Geral Preferenza)
-  const pgpUP = totalPessoasGeral > 0 ? (totalVendaUP / totalPessoasGeral).toFixed(0) : "N/A";
+  // 1. PGP (Produtividade Geral Preferenza) - MUST BE MACRO (unaffected by filters except Ano/Mes)
+  // Calculate total UP without supervisor/perfil/grupo/estado filters
+  let dataForPGP = data;
+  if (selectedAno !== "all") {
+    dataForPGP = dataForPGP.filter(item => String(item.Ano) === selectedAno);
+  }
+  if (!selectedMes.includes("all")) {
+    dataForPGP = dataForPGP.filter(item => selectedMes.includes(String(item.Mes)));
+  }
+  const totalVendaUP_PGP = dataForPGP.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
+  const pgpUP = totalPessoasGeral > 0 ? (totalVendaUP_PGP / totalPessoasGeral).toFixed(0) : "N/A";
 
   // 2. PPP (Produtividade por Promotor)
   // Venda Líquida (UP) apenas dos Perfis que possuem promotores alocados, dividida pela quantidade de promotores alocados
@@ -197,10 +206,20 @@ export default function Home() {
       });
   }, []);
 
-  const vendasPerfisComPromotor = filteredData.filter(item => perfisComPromotor.includes(String(item.Perfil).trim().toUpperCase()));
+  // PPP should also be macro (unaffected by filters except Ano/Mes)
+  const vendasPerfisComPromotor = dataForPGP.filter(item => perfisComPromotor.includes(String(item.Perfil).trim().toUpperCase()));
   const totalVendaUP_PPP = vendasPerfisComPromotor.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
+  
   // The allocation of promotores for these profiles is the sum of FTE for these profiles
-  const totalFTE_PPP = vendasPerfisComPromotor.reduce((sum, item) => sum + (item.FTE || 0), 0);
+  // We need to sum FTE per unique CNPJ to avoid duplicating FTE for the same store across different products/months
+  const uniqueStoresPPP = new Map();
+  vendasPerfisComPromotor.forEach(item => {
+    const key = item.CNPJ_clean || item.Cliente;
+    if (!uniqueStoresPPP.has(key)) {
+      uniqueStoresPPP.set(key, item.FTE || 0);
+    }
+  });
+  const totalFTE_PPP = Array.from(uniqueStoresPPP.values()).reduce((sum, fte) => sum + fte, 0);
   const pppUP = totalFTE_PPP > 0 ? (totalVendaUP_PPP / totalFTE_PPP).toFixed(0) : "N/A";
 
   // 3. Produtividade por Perfil
@@ -212,12 +231,30 @@ export default function Home() {
     perfilName = selectedPerfil[0];
     const vendasPerfil = filteredData.filter(item => item.Perfil === perfilName);
     const totalVendaUP_Perfil = vendasPerfil.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
-    const totalFTE_Perfil = vendasPerfil.reduce((sum, item) => sum + (item.FTE || 0), 0);
+    
+    const uniqueStoresPerfil = new Map();
+    vendasPerfil.forEach(item => {
+      const key = item.CNPJ_clean || item.Cliente;
+      if (!uniqueStoresPerfil.has(key)) {
+        uniqueStoresPerfil.set(key, item.FTE || 0);
+      }
+    });
+    const totalFTE_Perfil = Array.from(uniqueStoresPerfil.values()).reduce((sum, fte) => sum + fte, 0);
+    
     produtividadePerfilUP = totalFTE_Perfil > 0 ? (totalVendaUP_Perfil / totalFTE_Perfil).toFixed(0) : "0";
   } else if (selectedPerfil.length > 1 && !selectedPerfil.includes("all")) {
     perfilName = "Múltiplos Perfis";
     const totalVendaUP_Perfil = filteredData.reduce((sum, item) => sum + (visao === "vendas" ? (item.UP_Liquida || 0) : (item.UP_Devolucao || 0)), 0);
-    const totalFTE_Perfil = filteredData.reduce((sum, item) => sum + (item.FTE || 0), 0);
+    
+    const uniqueStoresPerfil = new Map();
+    filteredData.forEach(item => {
+      const key = item.CNPJ_clean || item.Cliente;
+      if (!uniqueStoresPerfil.has(key)) {
+        uniqueStoresPerfil.set(key, item.FTE || 0);
+      }
+    });
+    const totalFTE_Perfil = Array.from(uniqueStoresPerfil.values()).reduce((sum, fte) => sum + fte, 0);
+    
     produtividadePerfilUP = totalFTE_Perfil > 0 ? (totalVendaUP_Perfil / totalFTE_Perfil).toFixed(0) : "0";
   }
   
