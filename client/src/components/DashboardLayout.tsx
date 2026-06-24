@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { BarChart3, Home, LayoutDashboard, Map, PieChart, Settings, Users } from "lucide-react";
+import { BarChart3, Home, LayoutDashboard, Map, PieChart, Settings, Users, TrendingDown } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 interface DashboardLayoutProps {
@@ -15,6 +15,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { icon: BarChart3, label: "Performance", href: "/performance" },
     { icon: PieChart, label: "Financeiro", href: "/financeiro" },
     { icon: Map, label: "Geográfico", href: "/mapa" },
+    { icon: TrendingDown, label: "Devoluções Criativa", href: "/devolucoes" },
   ];
 
   return (

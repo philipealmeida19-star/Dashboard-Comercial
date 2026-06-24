@@ -8,7 +8,8 @@ import Home from "./pages/Home";
 import Supervisao from "./pages/Supervisao";
 import Performance from "./pages/Performance";
 import Financeiro from "./pages/Financeiro";
-import Mapa from "./pages/Mapa";
+import Mapa from "@/pages/Mapa";
+import Devolucoes from "@/pages/Devolucoes";
 
 
 function Router() {
@@ -19,6 +20,7 @@ function Router() {
       <Route path={"/performance"} component={Performance} />
       <Route path={"/financeiro"} component={Financeiro} />
       <Route path={"/mapa"} component={Mapa} />
+      <Route path={"/devolucoes"} component={Devolucoes} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
